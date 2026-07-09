@@ -18,6 +18,7 @@ menu = st.sidebar.selectbox(
     "Menu",
     [
         "Home",
+        "Dashboard",
         "Farm Records",
         "Crop Information",
         "Weather"
@@ -38,13 +39,85 @@ This system helps manage production records for Aseem Farms.
 - View crop information
 - View weather information
 """)
+# dashboard
+elif menu == "Dashboard":
 
-# Farm Records
-elif menu == "Farm Records":
+    st.header("📊 Dashboard")
+
+    conn = sqlite3.connect("farm.db")
+
+    data = pd.read_sql_query("SELECT * FROM farm_records", conn)
+
+    conn.close()
+
+    if data.empty:
+        st.warning("No farm records available.")
+    else:
+
+        # Total Production
+        total_production = data["quantity_kg"].sum()
+
+        # Total Revenue
+        if "price_per_kg" in data.columns:
+            total_revenue = (
+                data["quantity_kg"] * data["price_per_kg"]
+            ).sum()
+        else:
+            total_revenue = 0
+
+        # Number of Crop Types
+        total_crops = data["crop"].nunique()
+
+        # Harvested Crops
+        harvested = len(
+            data[data["status"] == "Harvested"]
+        )
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.metric(
+                "🌾 Total Production",
+                f"{total_production:,.0f} kg"
+            )
+
+            st.metric(
+                "🌱 Crop Types",
+                total_crops
+            )
+
+        with col2:
+            st.metric(
+                "💰 Total Revenue",
+                f"KES {total_revenue:,.2f}"
+            )
+
+            st.metric(
+                "✅ Harvested Crops",
+                harvested
+            )
+# farm records
+elif menu == "Farm records":
 
     st.header("Farm Production Records")
 
     conn = sqlite3.connect("farm.db")
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS farm_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            crop TEXT,
+            field_name TEXT,
+            planting_date TEXT,
+            quantity_kg REAL,
+            price_per_kg REAL,
+            revenue REAL,
+            status TEXT
+        )
+        """
+    )
 
     data = pd.read_sql_query(
         "SELECT * FROM farm_records",
@@ -52,7 +125,6 @@ elif menu == "Farm Records":
     )
 
     st.dataframe(data)
-
 
     # Export CSV
     csv = data.to_csv(index=False)
@@ -63,78 +135,151 @@ elif menu == "Farm Records":
         file_name="farm_records.csv",
         mime="text/csv"
     )
+
+    
+
+    st.subheader("➕ Add Record")
+
+    with st.form("add_record"):
+        add_crop = st.selectbox(
+            "Crop",
+            ["Maize", "Tomatoes", "French Beans", "Broccoli", "Rice"],
+            key="add_crop"
+        )
+
+        add_field = st.selectbox(
+            "Field",
+            ["Field A", "Field B", "Field C", "Field D", "Field E"],
+            key="add_field"
+        )
+
+        add_planting_date = st.date_input(
+            "Planting Date",
+            key="add_date"
+        )
+
+        add_quantity = st.number_input(
+            "Quantity (kg)",
+            min_value=0.0,
+            step=1.0,
+            key="add_quantity"
+        )
+
+        add_price = st.number_input(
+            "Price per kg",
+            min_value=0.0,
+            key="add_price"
+        )
+
+        add_status = st.selectbox(
+            "Status",
+            ["Growing", "Ready", "Harvested"],
+            key="add_status"
+        )
+
+        submitted = st.form_submit_button("Add Record")
+
+        if submitted:
+            revenue = add_quantity * add_price
+
+            cursor.execute(
+                """
+                INSERT INTO farm_records
+                (crop, field_name, planting_date, quantity_kg,
+                 price_per_kg, revenue, status)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    add_crop,
+                    add_field,
+                    str(add_planting_date),
+                    add_quantity,
+                    add_price,
+                    revenue,
+                    add_status
+                )
+            )
+
+            conn.commit()
+
+            st.success("Record added successfully!")
+            st.rerun()
+
     st.subheader("✏️ Update Record")
 
     record_id = st.number_input(
         "Record ID",
         min_value=1,
-        step=1
+        step=1,
+        key="update_id"
     )
 
-    crop = st.selectbox(
+    update_crop = st.selectbox(
         "Crop",
-        ["Maize", "French Beans", "Broccoli", "Tomatoes", "Rice"]
+        ["Maize", "French Beans", "Broccoli", "Tomatoes", "Rice"],
+        key="update_crop"
     )
 
-    field = st.selectbox(
+    update_field = st.selectbox(
         "Field",
-        ["Field A", "Field B", "Field C", "Field D", "Field E"]
+        ["Field A", "Field B", "Field C", "Field D", "Field E"],
+        key="update_field"
     )
 
-    planting_date = st.date_input("Planting Date")
+    update_planting_date = st.date_input(
+        "Planting Date",
+        key="update_date"
+    )
 
-    harvest_date = st.date_input("Harvest Date")
-
-    quantity = st.number_input(
+    update_quantity = st.number_input(
         "Quantity (kg)",
-        min_value=0
+        min_value=0,
+        key="update_quantity"
     )
 
-    price = st.number_input(
+    update_price = st.number_input(
         "Price per kg",
-        min_value=0.0
+        min_value=0.0,
+        key="update_price"
     )
 
-    status = st.selectbox(
+    update_status = st.selectbox(
         "Status",
-        ["Growing", "Ready", "Harvested"]
+        ["Growing", "Ready", "Harvested"],
+        key="update_status"
     )
-
-    # update record
     if st.button("Update Record"):
-        revenue = quantity * price
+        revenue = update_quantity * update_price
 
-        cursor = conn.cursor()
-
-        cursor.execute("""
+        cursor.execute(
+            """
             UPDATE farm_records
             SET crop = ?,
                 field_name = ?,
                 planting_date = ?,
-                harvest_date = ?,
                 quantity_kg = ?,
                 price_per_kg = ?,
                 revenue = ?,
                 status = ?
             WHERE id = ?
-        """, (
-            crop,
-            field,
-            planting_date,
-            harvest_date,
-            quantity,
-            price,
-            revenue,
-            status,
-            record_id
-        ))
+            """,
+            (
+                update_crop,
+                update_field,
+                str(update_planting_date),
+                update_quantity,
+                update_price,
+                revenue,
+                update_status,
+                record_id
+            )
+        )
 
         conn.commit()
 
         st.success("Record updated successfully!")
-        st.experimental_rerun()
-
-    # Delete Record
+        st.rerun()
+    # Delete record
     st.subheader("🗑 Delete Record")
 
     delete_id = st.number_input(
@@ -145,8 +290,6 @@ elif menu == "Farm Records":
     )
 
     if st.button("Delete Record"):
-        cursor = conn.cursor()
-
         cursor.execute(
             "DELETE FROM farm_records WHERE id = ?",
             (delete_id,)
@@ -155,9 +298,23 @@ elif menu == "Farm Records":
         conn.commit()
 
         st.success("Record deleted successfully!")
-        st.experimental_rerun()
+        st.rerun()
 
     conn.close()
+
+# Crop Information
+elif menu == "Crop Information":
+
+    crop_data = pd.read_csv("crop_information.csv")
+
+    st.subheader("🌱 Crop Information")
+
+    selected_crop = st.selectbox("Choose a crop", crop_data["Crop"])
+
+    crop = crop_data[crop_data["Crop"] == selected_crop].iloc[0]
+
+    st.write(f"### {crop['Crop']}")
+    st.write(crop["Description"])
 
 # Weather
 elif menu == "Weather":

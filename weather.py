@@ -9,6 +9,8 @@ def get_weather():
     )
 
     response = requests.get(url)
+    print(response.status_code)
+    print(response.text)
 
     if response.status_code == 200:
 
@@ -37,4 +39,5 @@ def get_weather():
 
         return temperature, day_time, condition, wind_speed
 
+    
     return None

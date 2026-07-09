@@ -41,7 +41,7 @@ with open("crop_information.csv", "w", newline="", encoding="utf-8") as file:
 
             description = ""
 
-            # Find the first non-empty paragraph
+            # Find the first paragraph
             for paragraph in paragraphs:
 
                 text = paragraph.get_text(strip=True)
